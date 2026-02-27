@@ -1,0 +1,11 @@
+out/
+node_modules/
+*.vsix
+.vscode-test/
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.log
