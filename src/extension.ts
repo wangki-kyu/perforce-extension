@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import { execSync } from 'child_process';
 
 function isReadOnly(document: vscode.TextDocument): boolean {
   try {
@@ -9,6 +10,17 @@ function isReadOnly(document: vscode.TextDocument): boolean {
     // On Unix, check if write permission bit is set
     return (stats.mode & 0o200) === 0;
   } catch {
+    return false;
+  }
+}
+
+async function isFileInPerforce(filePath: string): Promise<boolean> {
+  try {
+    // Use p4 fstat to check if file is in Perforce
+    const result = execSync(`p4 fstat "${filePath}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+    return result.trim().length > 0;
+  } catch (error) {
+    // File is not in Perforce or p4 command failed
     return false;
   }
 }
@@ -25,6 +37,36 @@ async function executePerforceEdit(fileUri: vscode.Uri): Promise<boolean> {
       return true;
     } catch (error2) {
       vscode.window.showErrorMessage('Failed to run Perforce edit command. Make sure Perforce for VS Code extension is installed.');
+      return false;
+    }
+  }
+}
+
+async function executePerforceAdd(fileUri: vscode.Uri): Promise<boolean> {
+  try {
+    await vscode.commands.executeCommand('perforce.add', fileUri);
+    return true;
+  } catch (error) {
+    try {
+      await vscode.commands.executeCommand('perforce.menuFunctionAdd', fileUri);
+      return true;
+    } catch (error2) {
+      vscode.window.showErrorMessage('Failed to run Perforce add command. Make sure Perforce for VS Code extension is installed.');
+      return false;
+    }
+  }
+}
+
+async function executePerforceDelete(fileUri: vscode.Uri): Promise<boolean> {
+  try {
+    await vscode.commands.executeCommand('perforce.delete', fileUri);
+    return true;
+  } catch (error) {
+    try {
+      await vscode.commands.executeCommand('perforce.menuFunctionDelete', fileUri);
+      return true;
+    } catch (error2) {
+      vscode.window.showErrorMessage('Failed to run Perforce delete command. Make sure Perforce for VS Code extension is installed.');
       return false;
     }
   }
@@ -78,7 +120,7 @@ export function activate(context: vscode.ExtensionContext) {
       try {
         const fileName = document.fileName.split(/[\\/]/).pop() || document.fileName;
         const result = await vscode.window.showWarningMessage(
-          `Do you want to edit ${fileName} in Perforce?`,
+          `${fileName} is read-only. Do you want to edit it in Perforce?`,
           { modal: true },
           'Yes',
           'No'
@@ -115,7 +157,62 @@ export function activate(context: vscode.ExtensionContext) {
     })();
   });
 
+  // Listen for file creation
+  const createDisposable = vscode.workspace.onDidCreateFiles(async (event) => {
+    const config = vscode.workspace.getConfiguration('perforceAutoEdit');
+    if (!config.get('enabled', true)) return;
+
+    for (const file of event.files) {
+      const fileName = file.fsPath.split(/[\\/]/).pop() || file.fsPath;
+      const result = await vscode.window.showWarningMessage(
+        `Do you want to add ${fileName} to Perforce?`,
+        { modal: true },
+        'Yes',
+        'No'
+      );
+
+      if (result === 'Yes') {
+        await executePerforceAdd(file);
+      }
+    }
+  });
+
+  // Listen for file deletion (before files are actually deleted)
+  const deleteDisposable = vscode.workspace.onWillDeleteFiles(async (event) => {
+    const config = vscode.workspace.getConfiguration('perforceAutoEdit');
+    if (!config.get('enabled', true)) return;
+
+    // Process all files that are in Perforce
+    event.waitUntil(
+      (async () => {
+        for (const file of event.files) {
+          const inPerforce = await isFileInPerforce(file.fsPath);
+          if (!inPerforce) continue;
+
+          const fileName = file.fsPath.split(/[\\/]/).pop() || file.fsPath;
+
+          const result = await vscode.window.showWarningMessage(
+            `Do you want to delete ${fileName} from Perforce?`,
+            { modal: true },
+            'Yes',
+            'No'
+          );
+
+          if (result === 'Yes') {
+            // Execute p4 delete BEFORE file is deleted from workspace
+            await executePerforceDelete(file);
+          } else {
+            // User clicked No - cancel the deletion
+            throw new Error('File deletion cancelled by user');
+          }
+        }
+      })()
+    );
+  });
+
   context.subscriptions.push(typeDisposable);
+  context.subscriptions.push(createDisposable);
+  context.subscriptions.push(deleteDisposable);
 
   console.log('Perforce Auto Edit extension is now active');
 }

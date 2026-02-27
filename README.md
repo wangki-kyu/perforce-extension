@@ -4,10 +4,12 @@ Automatically prompt for `p4 edit` when attempting to modify read-only files in 
 
 ## Features
 
-- Detects when you try to edit read-only files
-- Shows a modal dialog asking if you want to run Perforce edit
+- **Edit**: Detects when you try to edit read-only files and prompts to run `p4 edit`
+- **Add**: Automatically prompts to run `p4 add` when new files are created
+- **Delete**: Automatically prompts to run `p4 delete` when files are deleted
+- Shows modal dialogs asking for confirmation before running Perforce commands
 - Integrates with [Perforce for VS Code](https://marketplace.visualstudio.com/items?itemName=swordev.perforce) extension
-- Improves workflow by eliminating manual Perforce edit commands
+- Improves workflow by eliminating manual Perforce commands
 
 ## Requirements
 
@@ -27,7 +29,7 @@ Automatically prompt for `p4 edit` when attempting to modify read-only files in 
    }
    ```
 4. When you try to edit a read-only file:
-   - A modal dialog will appear asking "Do you want to edit [filename] in Perforce?"
+   - A modal dialog will appear asking "[filename] is read-only. Do you want to edit it in Perforce?"
    - Click "Yes" to execute `p4 edit` on that file
    - Click "No" to skip (the dialog will appear again on next edit attempt)
 
@@ -52,21 +54,31 @@ Automatically prompt for `p4 edit` when attempting to modify read-only files in 
 4. If accepted, executes the edit command from Perforce for VS Code extension
 5. Prevents prompting again for the same file once successfully edited
 
-## Example Workflow
+## Example Workflows
+
+### Editing a Read-Only File
 
 **Before:**
 1. Try to edit `readonly-file.txt` → No changes written (read-only)
-2. Open Perforce panel
-3. Right-click file → "Edit"
-4. Confirm the change
-5. Close Perforce panel
-6. Try to edit again
+2. Open Perforce panel → Right-click → "Edit"
+3. Manually save and confirm
 
 **After:**
-1. Try to edit `readonly-file.txt` → Modal dialog appears
-2. Click "Yes"
-3. File automatically marked for edit
-4. Continue editing
+1. Try to edit `readonly-file.txt` → Modal appears: "Do you want to edit readonly-file.txt in Perforce?"
+2. Click "Yes" → Automatically runs `p4 edit`
+3. File opens for editing
+
+### Creating a New File
+
+1. Create `newfile.txt` in workspace
+2. Modal appears: "Do you want to add newfile.txt to Perforce?"
+3. Click "Yes" → Automatically runs `p4 add`
+
+### Deleting a File
+
+1. Delete `oldfile.txt` from workspace
+2. Modal appears: "Do you want to delete oldfile.txt from Perforce?"
+3. Click "Yes" → Automatically runs `p4 delete`
 
 ## Troubleshooting
 
