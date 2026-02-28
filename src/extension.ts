@@ -25,6 +25,18 @@ async function isFileInPerforce(filePath: string): Promise<boolean> {
   }
 }
 
+async function isInPerforceWorkspace(filePath: string): Promise<boolean> {
+  try {
+    // Check if the file's directory is in a Perforce workspace
+    // Use p4 client to verify current workspace configuration
+    const result = execSync(`p4 client -l`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+    return result.trim().length > 0;
+  } catch (error) {
+    // Not in a Perforce workspace or p4 command failed
+    return false;
+  }
+}
+
 async function executePerforceEdit(fileUri: vscode.Uri): Promise<boolean> {
   try {
     // Try the primary command name
@@ -161,6 +173,10 @@ export function activate(context: vscode.ExtensionContext) {
   const createDisposable = vscode.workspace.onDidCreateFiles(async (event) => {
     const config = vscode.workspace.getConfiguration('perforceExtension');
     if (!config.get('enabled', true)) return;
+
+    // Check if in Perforce workspace
+    const inWorkspace = await isInPerforceWorkspace(event.files[0]?.fsPath || '');
+    if (!inWorkspace) return;
 
     for (const file of event.files) {
       const fileName = file.fsPath.split(/[\\/]/).pop() || file.fsPath;
