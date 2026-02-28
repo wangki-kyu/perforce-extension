@@ -8,20 +8,20 @@ Automate your Perforce workflow with smart prompts for `p4 edit`, `p4 add`, and 
 - **Add**: Automatically prompts to run `p4 add` when new files are created
 - **Delete**: Automatically prompts to run `p4 delete` when files are deleted
 - Shows modal dialogs asking for confirmation before running Perforce commands
-- Integrates with [Perforce for VS Code](https://marketplace.visualstudio.com/items?itemName=swordev.perforce) extension
+- Integrates with [Perforce for VS Code](https://marketplace.visualstudio.com/items?itemName=mjcrouch.perforce) extension
 - Improves workflow by eliminating manual Perforce commands
 
 ## Requirements
 
 - VS Code 1.80.0 or higher
-- [Perforce for VS Code](https://marketplace.visualstudio.com/items?itemName=swordev.perforce) extension installed
+- [Perforce for VS Code](https://marketplace.visualstudio.com/items?itemName=mjcrouch.perforce) extension installed
 - Perforce client configured and accessible
 - `files.readonlyFromPermissions` setting enabled in VS Code settings
 
 ## Usage
 
 1. Install this extension
-2. Ensure [Perforce for VS Code](https://marketplace.visualstudio.com/items?itemName=swordev.perforce) is installed
+2. Ensure [Perforce for VS Code](https://marketplace.visualstudio.com/items?itemName=mjcrouch.perforce) is installed
 3. Enable the `files.readonlyFromPermissions` setting in VS Code:
    ```json
    {

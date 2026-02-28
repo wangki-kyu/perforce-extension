@@ -27,7 +27,7 @@
     "automation"
   ],
   "extensionDependencies": [
-    "swordev.perforce"
+    "mjcrouch.perforce"
   ],
   "activationEvents": [
     "onStartupFinished"
