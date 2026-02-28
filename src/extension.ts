@@ -36,7 +36,7 @@ async function executePerforceEdit(fileUri: vscode.Uri): Promise<boolean> {
       await vscode.commands.executeCommand('perforce.menuFunctionEdit', fileUri);
       return true;
     } catch (error2) {
-      vscode.window.showErrorMessage('Failed to run Perforce edit command. Make sure Perforce for VS Code extension is installed.');
+      vscode.window.showErrorMessage('Failed to run Perforce edit. Please check your Perforce login and configuration.');
       return false;
     }
   }
@@ -51,7 +51,7 @@ async function executePerforceAdd(fileUri: vscode.Uri): Promise<boolean> {
       await vscode.commands.executeCommand('perforce.menuFunctionAdd', fileUri);
       return true;
     } catch (error2) {
-      vscode.window.showErrorMessage('Failed to run Perforce add command. Make sure Perforce for VS Code extension is installed.');
+      vscode.window.showErrorMessage('Failed to run Perforce add. Please check your Perforce login and configuration.');
       return false;
     }
   }
@@ -66,7 +66,7 @@ async function executePerforceDelete(fileUri: vscode.Uri): Promise<boolean> {
       await vscode.commands.executeCommand('perforce.menuFunctionDelete', fileUri);
       return true;
     } catch (error2) {
-      vscode.window.showErrorMessage('Failed to run Perforce delete command. Make sure Perforce for VS Code extension is installed.');
+      vscode.window.showErrorMessage('Failed to run Perforce delete. Please check your Perforce login and configuration.');
       return false;
     }
   }
@@ -93,7 +93,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     // Skip if extension is disabled
-    const config = vscode.workspace.getConfiguration('perforceAutoEdit');
+    const config = vscode.workspace.getConfiguration('perforceExtension');
     if (!config.get('enabled', true)) {
       return vscode.commands.executeCommand('default:type', args);
     }
@@ -159,7 +159,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Listen for file creation
   const createDisposable = vscode.workspace.onDidCreateFiles(async (event) => {
-    const config = vscode.workspace.getConfiguration('perforceAutoEdit');
+    const config = vscode.workspace.getConfiguration('perforceExtension');
     if (!config.get('enabled', true)) return;
 
     for (const file of event.files) {
@@ -179,7 +179,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Listen for file deletion (before files are actually deleted)
   const deleteDisposable = vscode.workspace.onWillDeleteFiles(async (event) => {
-    const config = vscode.workspace.getConfiguration('perforceAutoEdit');
+    const config = vscode.workspace.getConfiguration('perforceExtension');
     if (!config.get('enabled', true)) return;
 
     // Process all files that are in Perforce

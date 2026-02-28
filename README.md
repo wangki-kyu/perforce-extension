@@ -1,6 +1,6 @@
-# Perforce Auto Edit
+# Perforce Extension
 
-Automatically prompt for `p4 edit` when attempting to modify read-only files in VS Code.
+Automate your Perforce workflow with smart prompts for `p4 edit`, `p4 add`, and `p4 delete` operations in VS Code.
 
 ## Features
 
@@ -35,14 +35,14 @@ Automatically prompt for `p4 edit` when attempting to modify read-only files in 
 
 ## Settings
 
-### `perforceAutoEdit.enabled`
+### `perforceExtension.enabled`
 - Type: `boolean`
 - Default: `true`
-- Description: Enable/disable the auto-prompt for Perforce edit
+- Description: Enable/disable Perforce Extension auto-prompts
 
 ```json
 {
-  "perforceAutoEdit.enabled": false
+  "perforceExtension.enabled": false
 }
 ```
 

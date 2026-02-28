@@ -1,13 +1,33 @@
 {
-  "name": "perforce-auto-edit",
-  "displayName": "Perforce Auto Edit",
-  "description": "Automatically prompt for p4 edit on readonly file changes",
+  "name": "perforce-extension",
+  "displayName": "Perforce Extension",
+  "description": "Automate Perforce workflow with smart prompts for p4 edit, add, and delete operations",
   "version": "0.0.1",
+  "publisher": "wangki-kyu",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wangki-kyu/perforce-extension"
+  },
+  "bugs": {
+    "url": "https://github.com/wangki-kyu/perforce-extension/issues"
+  },
+  "homepage": "https://github.com/wangki-kyu/perforce-extension/blob/main/README.md",
   "engines": {
     "vscode": "^1.80.0"
   },
   "categories": [
     "Other"
+  ],
+  "keywords": [
+    "perforce",
+    "p4",
+    "vcs",
+    "version control",
+    "automation"
+  ],
+  "extensionDependencies": [
+    "swordev.perforce"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -15,12 +35,12 @@
   "main": "./out/extension.js",
   "contributes": {
     "configuration": {
-      "title": "Perforce Auto Edit",
+      "title": "Perforce Extension",
       "properties": {
-        "perforceAutoEdit.enabled": {
+        "perforceExtension.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable auto-prompt for perforce edit"
+          "description": "Enable Perforce Extension auto-prompts"
         }
       }
     }
