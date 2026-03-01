@@ -89,14 +89,27 @@ async function executePerforceEdit(fileUri: vscode.Uri): Promise<boolean> {
 
 async function executePerforceAdd(fileUri: vscode.Uri): Promise<boolean> {
   try {
-    console.log(`[Perforce] Executing p4 add for: ${fileUri.fsPath}`);
-    execSync(`p4 add "${fileUri.fsPath}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
-    const fileName = fileUri.fsPath.split(/[\\/]/).pop();
+    const path_module = require('path');
+    const filePath = fileUri.fsPath;
+    const fileDir = path_module.dirname(filePath);
+    const relativePath = path_module.relative(fileDir, filePath);
+
+    console.log(`[Perforce] Executing p4 add for: ${filePath}`);
+    console.log(`[Perforce] Using relative path: ${relativePath}`);
+    console.log(`[Perforce] Working directory: ${fileDir}`);
+
+    execSync(`p4 add "${relativePath}"`, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      cwd: fileDir
+    });
+
+    const fileName = filePath.split(/[\\/]/).pop();
     console.log(`[Perforce] Successfully added: ${fileName}`);
     vscode.window.showInformationMessage(`${fileName} added to Perforce`);
     return true;
   } catch (error) {
-    console.log(`[Perforce] Failed to add: ${fileUri.fsPath} - Error: ${error}`);
+    console.log(`[Perforce] Failed to add - Error: ${error}`);
     vscode.window.showErrorMessage(`Failed to add to Perforce: ${error}`);
     return false;
   }
@@ -104,14 +117,27 @@ async function executePerforceAdd(fileUri: vscode.Uri): Promise<boolean> {
 
 async function executePerforceDelete(fileUri: vscode.Uri): Promise<boolean> {
   try {
-    console.log(`[Perforce] Executing p4 delete for: ${fileUri.fsPath}`);
-    execSync(`p4 delete "${fileUri.fsPath}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
-    const fileName = fileUri.fsPath.split(/[\\/]/).pop();
+    const path_module = require('path');
+    const filePath = fileUri.fsPath;
+    const fileDir = path_module.dirname(filePath);
+    const relativePath = path_module.relative(fileDir, filePath);
+
+    console.log(`[Perforce] Executing p4 delete for: ${filePath}`);
+    console.log(`[Perforce] Using relative path: ${relativePath}`);
+    console.log(`[Perforce] Working directory: ${fileDir}`);
+
+    execSync(`p4 delete "${relativePath}"`, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      cwd: fileDir
+    });
+
+    const fileName = filePath.split(/[\\/]/).pop();
     console.log(`[Perforce] Successfully deleted: ${fileName}`);
     vscode.window.showInformationMessage(`${fileName} deleted from Perforce`);
     return true;
   } catch (error) {
-    console.log(`[Perforce] Failed to delete: ${fileUri.fsPath} - Error: ${error}`);
+    console.log(`[Perforce] Failed to delete - Error: ${error}`);
     vscode.window.showErrorMessage(`Failed to delete from Perforce: ${error}`);
     return false;
   }
