@@ -2,7 +2,7 @@
   "name": "perforce-extension",
   "displayName": "Perforce Extension",
   "description": "Automate Perforce workflow with smart prompts for p4 edit, add, and delete operations",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "wangki-kyu",
   "license": "MIT",
   "repository": {
