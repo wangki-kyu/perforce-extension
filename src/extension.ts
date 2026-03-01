@@ -30,33 +30,20 @@ async function isFileInPerforce(filePath: string): Promise<boolean> {
 
 async function isInPerforceWorkspace(filePath: string): Promise<boolean> {
   try {
-    // Get workspace info using p4 info
-    const infoResult = execSync(`p4 info`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
-    console.log(`[Perforce] p4 info output:\n${infoResult}`);
-
-    // Extract client root from p4 info output
-    const clientRootMatch = infoResult.match(/Client root:\s*(.+)/);
-    if (!clientRootMatch) {
-      console.log(`[Perforce] isInPerforceWorkspace("${filePath}"): false (no client root found)`);
-      return false;
-    }
-
-    const clientRoot = clientRootMatch[1].trim();
-    console.log(`[Perforce] Extracted clientRoot: "${clientRoot}"`);
-
-    // Check if the file is under the client root
-    const normalizedFilePath = filePath.replace(/\\/g, '/').toLowerCase();
-    const normalizedClientRoot = clientRoot.replace(/\\/g, '/').toLowerCase();
-
-    console.log(`[Perforce] Normalized file path: "${normalizedFilePath}"`);
-    console.log(`[Perforce] Normalized client root: "${normalizedClientRoot}"`);
-
-    const inWorkspace = normalizedFilePath.startsWith(normalizedClientRoot);
+    // Try to run p4 where on the file - if successful, file is in a Perforce workspace
+    // This accounts for all workspace configurations (multiple drives, folders, etc.)
+    const path_module = require('path');
+    const result = execSync(`p4 where "${filePath}"`, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      cwd: path_module.dirname(filePath)
+    });
+    const inWorkspace = result.trim().length > 0;
     console.log(`[Perforce] isInPerforceWorkspace("${filePath}"): ${inWorkspace}`);
     return inWorkspace;
   } catch (error) {
-    // Not in a Perforce workspace or p4 command failed
-    console.log(`[Perforce] isInPerforceWorkspace("${filePath}"): false (error: ${error})`);
+    // If p4 where fails, file is not in workspace
+    console.log(`[Perforce] isInPerforceWorkspace("${filePath}"): false (file not in workspace)`);
     return false;
   }
 }
@@ -155,7 +142,21 @@ export function activate(context: vscode.ExtensionContext) {
     // Show modal dialog
     pendingPrompt = (async () => {
       try {
+        // Check if file is in Perforce workspace before showing dialog
+        console.log(`[Perforce] Checking if read-only file is in Perforce workspace: ${filePath}`);
+        const inWorkspace = await isInPerforceWorkspace(filePath);
+        if (!inWorkspace) {
+          console.log(`[Perforce] File is NOT in Perforce workspace, skipping edit dialog: ${filePath}`);
+          // Mark as dismissed so we don't keep asking
+          const timeout = setTimeout(() => {
+            dismissedFiles.delete(filePath);
+          }, 100);
+          dismissedFiles.set(filePath, timeout);
+          return;
+        }
+
         const fileName = document.fileName.split(/[\\/]/).pop() || document.fileName;
+        console.log(`[Perforce] Showing edit dialog for read-only file: ${fileName}`);
         const result = await vscode.window.showInformationMessage(
           `${fileName} is read-only. Do you want to edit it in Perforce?`,
           { modal: true },
@@ -163,6 +164,7 @@ export function activate(context: vscode.ExtensionContext) {
           'No'
         );
 
+        console.log(`[Perforce] User response for edit: ${result}`);
         if (result === 'Yes') {
           const success = await executePerforceEdit(document.uri);
           if (success) {
