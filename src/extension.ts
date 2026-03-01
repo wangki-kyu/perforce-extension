@@ -17,7 +17,14 @@ function isReadOnly(document: vscode.TextDocument): boolean {
 async function isFileInPerforce(filePath: string): Promise<boolean> {
   try {
     // Use p4 fstat to check if file is in Perforce
-    const result = execSync(`p4 fstat "${filePath}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+    // Run from file's directory so Perforce uses correct client
+    const path_module = require('path');
+    const fileDir = path_module.dirname(filePath);
+    const result = execSync(`p4 fstat "${filePath}"`, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      cwd: fileDir
+    });
     const inPerforce = result.trim().length > 0;
     console.log(`[Perforce] isFileInPerforce("${filePath}"): ${inPerforce}`);
     return inPerforce;
