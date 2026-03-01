@@ -18,21 +18,40 @@ async function isFileInPerforce(filePath: string): Promise<boolean> {
   try {
     // Use p4 fstat to check if file is in Perforce
     const result = execSync(`p4 fstat "${filePath}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
-    return result.trim().length > 0;
+    const inPerforce = result.trim().length > 0;
+    console.log(`[Perforce] isFileInPerforce("${filePath}"): ${inPerforce}`);
+    return inPerforce;
   } catch (error) {
     // File is not in Perforce or p4 command failed
+    console.log(`[Perforce] isFileInPerforce("${filePath}"): false (error: ${error})`);
     return false;
   }
 }
 
 async function isInPerforceWorkspace(filePath: string): Promise<boolean> {
   try {
-    // Use p4 where to check if file is actually in the workspace
-    // This command fails if the file is not in the workspace
-    const result = execSync(`p4 where "${filePath}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
-    return result.trim().length > 0;
+    // Get workspace info using p4 info
+    const infoResult = execSync(`p4 info`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+
+    // Extract client root from p4 info output
+    const clientRootMatch = infoResult.match(/Client root:\s*(.+)/);
+    if (!clientRootMatch) {
+      console.log(`[Perforce] isInPerforceWorkspace("${filePath}"): false (no client root found)`);
+      return false;
+    }
+
+    const clientRoot = clientRootMatch[1].trim();
+
+    // Check if the file is under the client root
+    const normalizedFilePath = filePath.replace(/\\/g, '/').toLowerCase();
+    const normalizedClientRoot = clientRoot.replace(/\\/g, '/').toLowerCase();
+
+    const inWorkspace = normalizedFilePath.startsWith(normalizedClientRoot);
+    console.log(`[Perforce] isInPerforceWorkspace("${filePath}"): ${inWorkspace} (clientRoot: ${clientRoot})`);
+    return inWorkspace;
   } catch (error) {
-    // File is not in a Perforce workspace or p4 command failed
+    // Not in a Perforce workspace or p4 command failed
+    console.log(`[Perforce] isInPerforceWorkspace("${filePath}"): false (error: ${error})`);
     return false;
   }
 }
@@ -56,10 +75,14 @@ async function executePerforceEdit(fileUri: vscode.Uri): Promise<boolean> {
 
 async function executePerforceAdd(fileUri: vscode.Uri): Promise<boolean> {
   try {
+    console.log(`[Perforce] Executing p4 add for: ${fileUri.fsPath}`);
     execSync(`p4 add "${fileUri.fsPath}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
-    vscode.window.showInformationMessage(`${fileUri.fsPath.split(/[\\/]/).pop()} added to Perforce`);
+    const fileName = fileUri.fsPath.split(/[\\/]/).pop();
+    console.log(`[Perforce] Successfully added: ${fileName}`);
+    vscode.window.showInformationMessage(`${fileName} added to Perforce`);
     return true;
   } catch (error) {
+    console.log(`[Perforce] Failed to add: ${fileUri.fsPath} - Error: ${error}`);
     vscode.window.showErrorMessage(`Failed to add to Perforce: ${error}`);
     return false;
   }
@@ -67,10 +90,14 @@ async function executePerforceAdd(fileUri: vscode.Uri): Promise<boolean> {
 
 async function executePerforceDelete(fileUri: vscode.Uri): Promise<boolean> {
   try {
+    console.log(`[Perforce] Executing p4 delete for: ${fileUri.fsPath}`);
     execSync(`p4 delete "${fileUri.fsPath}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
-    vscode.window.showInformationMessage(`${fileUri.fsPath.split(/[\\/]/).pop()} deleted from Perforce`);
+    const fileName = fileUri.fsPath.split(/[\\/]/).pop();
+    console.log(`[Perforce] Successfully deleted: ${fileName}`);
+    vscode.window.showInformationMessage(`${fileName} deleted from Perforce`);
     return true;
   } catch (error) {
+    console.log(`[Perforce] Failed to delete: ${fileUri.fsPath} - Error: ${error}`);
     vscode.window.showErrorMessage(`Failed to delete from Perforce: ${error}`);
     return false;
   }
@@ -167,24 +194,38 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Listen for file creation using FileWatcher
   const createWatcherDisposable = watcher.onDidCreate(async (uri) => {
+    console.log(`[Perforce] File created: ${uri.fsPath}`);
     const config = vscode.workspace.getConfiguration('perforceExtension');
-    if (!config.get('enabled', true)) return;
+    if (!config.get('enabled', true)) {
+      console.log('[Perforce] Extension is disabled, skipping file creation');
+      return;
+    }
 
     // Skip if not in Perforce workspace
+    console.log(`[Perforce] Checking if file is in workspace...`);
     const inWorkspace = await isInPerforceWorkspace(uri.fsPath);
-    if (!inWorkspace) return;
+    if (!inWorkspace) {
+      console.log(`[Perforce] File is NOT in Perforce workspace, skipping`);
+      return;
+    }
 
     // Skip if dialog is already showing for this file
-    if (pendingDialogs.has(uri.fsPath)) return;
+    if (pendingDialogs.has(uri.fsPath)) {
+      console.log(`[Perforce] Dialog already pending for this file, skipping`);
+      return;
+    }
 
     // Check if file is already in Perforce depot
+    console.log(`[Perforce] Checking if file is already in Perforce...`);
     const inPerforce = await isFileInPerforce(uri.fsPath);
     if (inPerforce) {
       // File is already in Perforce, don't ask to add it
+      console.log(`[Perforce] File is already in Perforce, skipping`);
       return;
     }
 
     const fileName = uri.fsPath.split(/[\\/]/).pop() || uri.fsPath;
+    console.log(`[Perforce] Showing add dialog for: ${fileName}`);
     pendingDialogs.add(uri.fsPath);
 
     try {
@@ -195,6 +236,7 @@ export function activate(context: vscode.ExtensionContext) {
         'No'
       );
 
+      console.log(`[Perforce] User response: ${result}`);
       if (result === 'Yes') {
         await executePerforceAdd(uri);
       }
@@ -205,20 +247,37 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Listen for file deletion using FileWatcher
   const deleteWatcherDisposable = watcher.onDidDelete(async (uri) => {
+    console.log(`[Perforce] File deleted: ${uri.fsPath}`);
     const config = vscode.workspace.getConfiguration('perforceExtension');
-    if (!config.get('enabled', true)) return;
+    if (!config.get('enabled', true)) {
+      console.log('[Perforce] Extension is disabled, skipping file deletion');
+      return;
+    }
 
     // Skip if not in Perforce workspace
+    console.log(`[Perforce] Checking if file is in workspace...`);
     const inWorkspace = await isInPerforceWorkspace(uri.fsPath);
-    if (!inWorkspace) return;
+    if (!inWorkspace) {
+      console.log(`[Perforce] File is NOT in Perforce workspace, skipping`);
+      return;
+    }
 
+    console.log(`[Perforce] Checking if file is in Perforce...`);
     const inPerforce = await isFileInPerforce(uri.fsPath);
-    if (!inPerforce) return;
+    if (!inPerforce) {
+      console.log(`[Perforce] File is NOT in Perforce, skipping`);
+      return;
+    }
 
     const fileName = uri.fsPath.split(/[\\/]/).pop() || uri.fsPath;
 
     // Skip if dialog is already showing for this file
-    if (pendingDialogs.has(uri.fsPath)) return;
+    if (pendingDialogs.has(uri.fsPath)) {
+      console.log(`[Perforce] Dialog already pending for this file, skipping`);
+      return;
+    }
+
+    console.log(`[Perforce] Showing delete dialog for: ${fileName}`);
     pendingDialogs.add(uri.fsPath);
 
     try {
@@ -229,6 +288,7 @@ export function activate(context: vscode.ExtensionContext) {
         'No'
       );
 
+      console.log(`[Perforce] User response: ${result}`);
       if (result === 'Yes') {
         await executePerforceDelete(uri);
       }
@@ -242,9 +302,11 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(deleteWatcherDisposable);
   context.subscriptions.push(watcher);
 
-  console.log('Perforce Auto Edit extension is now active');
+  console.log('[Perforce] ========================================');
+  console.log('[Perforce] Perforce Auto Edit extension is now ACTIVE');
+  console.log('[Perforce] ========================================');
 }
 
 export function deactivate() {
-  console.log('Perforce Auto Edit extension is now deactivated');
+  console.log('[Perforce] Perforce Auto Edit extension is now deactivated');
 }
