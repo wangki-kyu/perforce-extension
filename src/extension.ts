@@ -32,6 +32,7 @@ async function isInPerforceWorkspace(filePath: string): Promise<boolean> {
   try {
     // Get workspace info using p4 info
     const infoResult = execSync(`p4 info`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+    console.log(`[Perforce] p4 info output:\n${infoResult}`);
 
     // Extract client root from p4 info output
     const clientRootMatch = infoResult.match(/Client root:\s*(.+)/);
@@ -41,13 +42,17 @@ async function isInPerforceWorkspace(filePath: string): Promise<boolean> {
     }
 
     const clientRoot = clientRootMatch[1].trim();
+    console.log(`[Perforce] Extracted clientRoot: "${clientRoot}"`);
 
     // Check if the file is under the client root
     const normalizedFilePath = filePath.replace(/\\/g, '/').toLowerCase();
     const normalizedClientRoot = clientRoot.replace(/\\/g, '/').toLowerCase();
 
+    console.log(`[Perforce] Normalized file path: "${normalizedFilePath}"`);
+    console.log(`[Perforce] Normalized client root: "${normalizedClientRoot}"`);
+
     const inWorkspace = normalizedFilePath.startsWith(normalizedClientRoot);
-    console.log(`[Perforce] isInPerforceWorkspace("${filePath}"): ${inWorkspace} (clientRoot: ${clientRoot})`);
+    console.log(`[Perforce] isInPerforceWorkspace("${filePath}"): ${inWorkspace}`);
     return inWorkspace;
   } catch (error) {
     // Not in a Perforce workspace or p4 command failed
