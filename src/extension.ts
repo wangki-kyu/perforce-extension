@@ -40,10 +40,24 @@ async function isInPerforceWorkspace(filePath: string): Promise<boolean> {
     // Try to run p4 where on the file - if successful, file is in a Perforce workspace
     // This accounts for all workspace configurations (multiple drives, folders, etc.)
     const path_module = require('path');
+    const fileDir = path_module.dirname(filePath);
+
+    // Debug: Show which client Extension is using
+    try {
+      const infoResult = execSync(`p4 info`, {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+        cwd: fileDir
+      });
+      console.log(`[Perforce] p4 info from Extension (cwd: ${fileDir}):\n${infoResult}`);
+    } catch (infoError) {
+      console.log(`[Perforce] p4 info failed: ${infoError}`);
+    }
+
     const result = execSync(`p4 where "${filePath}"`, {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
-      cwd: path_module.dirname(filePath)
+      cwd: fileDir
     });
     const inWorkspace = result.trim().length > 0;
     console.log(`[Perforce] isInPerforceWorkspace("${filePath}"): ${inWorkspace}`);
@@ -51,6 +65,7 @@ async function isInPerforceWorkspace(filePath: string): Promise<boolean> {
   } catch (error) {
     // If p4 where fails, file is not in workspace
     console.log(`[Perforce] isInPerforceWorkspace("${filePath}"): false (file not in workspace)`);
+    console.log(`[Perforce] Error details: ${error}`);
     return false;
   }
 }
