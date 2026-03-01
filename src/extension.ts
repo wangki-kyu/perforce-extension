@@ -27,12 +27,12 @@ async function isFileInPerforce(filePath: string): Promise<boolean> {
 
 async function isInPerforceWorkspace(filePath: string): Promise<boolean> {
   try {
-    // Check if the file's directory is in a Perforce workspace
-    // Use p4 client to verify current workspace configuration
-    const result = execSync(`p4 client -l`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+    // Use p4 where to check if file is actually in the workspace
+    // This command fails if the file is not in the workspace
+    const result = execSync(`p4 where "${filePath}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
     return result.trim().length > 0;
   } catch (error) {
-    // Not in a Perforce workspace or p4 command failed
+    // File is not in a Perforce workspace or p4 command failed
     return false;
   }
 }
@@ -56,37 +56,30 @@ async function executePerforceEdit(fileUri: vscode.Uri): Promise<boolean> {
 
 async function executePerforceAdd(fileUri: vscode.Uri): Promise<boolean> {
   try {
-    await vscode.commands.executeCommand('perforce.add', fileUri);
+    execSync(`p4 add "${fileUri.fsPath}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+    vscode.window.showInformationMessage(`${fileUri.fsPath.split(/[\\/]/).pop()} added to Perforce`);
     return true;
   } catch (error) {
-    try {
-      await vscode.commands.executeCommand('perforce.menuFunctionAdd', fileUri);
-      return true;
-    } catch (error2) {
-      vscode.window.showErrorMessage('Failed to run Perforce add. Please check your Perforce login and configuration.');
-      return false;
-    }
+    vscode.window.showErrorMessage(`Failed to add to Perforce: ${error}`);
+    return false;
   }
 }
 
 async function executePerforceDelete(fileUri: vscode.Uri): Promise<boolean> {
   try {
-    await vscode.commands.executeCommand('perforce.delete', fileUri);
+    execSync(`p4 delete "${fileUri.fsPath}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+    vscode.window.showInformationMessage(`${fileUri.fsPath.split(/[\\/]/).pop()} deleted from Perforce`);
     return true;
   } catch (error) {
-    try {
-      await vscode.commands.executeCommand('perforce.menuFunctionDelete', fileUri);
-      return true;
-    } catch (error2) {
-      vscode.window.showErrorMessage('Failed to run Perforce delete. Please check your Perforce login and configuration.');
-      return false;
-    }
+    vscode.window.showErrorMessage(`Failed to delete from Perforce: ${error}`);
+    return false;
   }
 }
 
 export function activate(context: vscode.ExtensionContext) {
   let pendingPrompt: Promise<void> | null = null;
   const dismissedFiles = new Map<string, NodeJS.Timeout>();
+  const pendingDialogs = new Set<string>();
 
   // Override the 'type' command to intercept text input
   const typeDisposable = vscode.commands.registerCommand('type', async (args: any) => {
@@ -131,7 +124,7 @@ export function activate(context: vscode.ExtensionContext) {
     pendingPrompt = (async () => {
       try {
         const fileName = document.fileName.split(/[\\/]/).pop() || document.fileName;
-        const result = await vscode.window.showWarningMessage(
+        const result = await vscode.window.showInformationMessage(
           `${fileName} is read-only. Do you want to edit it in Perforce?`,
           { modal: true },
           'Yes',
@@ -169,18 +162,33 @@ export function activate(context: vscode.ExtensionContext) {
     })();
   });
 
-  // Listen for file creation
-  const createDisposable = vscode.workspace.onDidCreateFiles(async (event) => {
+  // Use FileSystemWatcher to monitor file changes instead of VSCode events
+  const watcher = vscode.workspace.createFileSystemWatcher('**/*', false, true, false);
+
+  // Listen for file creation using FileWatcher
+  const createWatcherDisposable = watcher.onDidCreate(async (uri) => {
     const config = vscode.workspace.getConfiguration('perforceExtension');
     if (!config.get('enabled', true)) return;
 
-    // Check if in Perforce workspace
-    const inWorkspace = await isInPerforceWorkspace(event.files[0]?.fsPath || '');
+    // Skip if not in Perforce workspace
+    const inWorkspace = await isInPerforceWorkspace(uri.fsPath);
     if (!inWorkspace) return;
 
-    for (const file of event.files) {
-      const fileName = file.fsPath.split(/[\\/]/).pop() || file.fsPath;
-      const result = await vscode.window.showWarningMessage(
+    // Skip if dialog is already showing for this file
+    if (pendingDialogs.has(uri.fsPath)) return;
+
+    // Check if file is already in Perforce depot
+    const inPerforce = await isFileInPerforce(uri.fsPath);
+    if (inPerforce) {
+      // File is already in Perforce, don't ask to add it
+      return;
+    }
+
+    const fileName = uri.fsPath.split(/[\\/]/).pop() || uri.fsPath;
+    pendingDialogs.add(uri.fsPath);
+
+    try {
+      const result = await vscode.window.showInformationMessage(
         `Do you want to add ${fileName} to Perforce?`,
         { modal: true },
         'Yes',
@@ -188,47 +196,51 @@ export function activate(context: vscode.ExtensionContext) {
       );
 
       if (result === 'Yes') {
-        await executePerforceAdd(file);
+        await executePerforceAdd(uri);
       }
+    } finally {
+      pendingDialogs.delete(uri.fsPath);
     }
   });
 
-  // Listen for file deletion (before files are actually deleted)
-  const deleteDisposable = vscode.workspace.onWillDeleteFiles(async (event) => {
+  // Listen for file deletion using FileWatcher
+  const deleteWatcherDisposable = watcher.onDidDelete(async (uri) => {
     const config = vscode.workspace.getConfiguration('perforceExtension');
     if (!config.get('enabled', true)) return;
 
-    // Process all files that are in Perforce
-    event.waitUntil(
-      (async () => {
-        for (const file of event.files) {
-          const inPerforce = await isFileInPerforce(file.fsPath);
-          if (!inPerforce) continue;
+    // Skip if not in Perforce workspace
+    const inWorkspace = await isInPerforceWorkspace(uri.fsPath);
+    if (!inWorkspace) return;
 
-          const fileName = file.fsPath.split(/[\\/]/).pop() || file.fsPath;
+    const inPerforce = await isFileInPerforce(uri.fsPath);
+    if (!inPerforce) return;
 
-          const result = await vscode.window.showWarningMessage(
-            `Do you want to delete ${fileName} from Perforce?`,
-            { modal: true },
-            'Yes',
-            'No'
-          );
+    const fileName = uri.fsPath.split(/[\\/]/).pop() || uri.fsPath;
 
-          if (result === 'Yes') {
-            // Execute p4 delete BEFORE file is deleted from workspace
-            await executePerforceDelete(file);
-          } else {
-            // User clicked No - cancel the deletion
-            throw new Error('File deletion cancelled by user');
-          }
-        }
-      })()
-    );
+    // Skip if dialog is already showing for this file
+    if (pendingDialogs.has(uri.fsPath)) return;
+    pendingDialogs.add(uri.fsPath);
+
+    try {
+      const result = await vscode.window.showInformationMessage(
+        `Do you want to delete ${fileName} from Perforce?`,
+        { modal: true },
+        'Yes',
+        'No'
+      );
+
+      if (result === 'Yes') {
+        await executePerforceDelete(uri);
+      }
+    } finally {
+      pendingDialogs.delete(uri.fsPath);
+    }
   });
 
   context.subscriptions.push(typeDisposable);
-  context.subscriptions.push(createDisposable);
-  context.subscriptions.push(deleteDisposable);
+  context.subscriptions.push(createWatcherDisposable);
+  context.subscriptions.push(deleteWatcherDisposable);
+  context.subscriptions.push(watcher);
 
   console.log('Perforce Auto Edit extension is now active');
 }
