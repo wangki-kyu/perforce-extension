@@ -35,6 +35,57 @@ async function isFileInPerforce(filePath: string): Promise<boolean> {
   }
 }
 
+async function isIgnoredByP4Ignore(filePath: string): Promise<boolean> {
+  try {
+    const path_module = require('path');
+    const fs_module = require('fs');
+
+    // Find .p4ignore file in current directory or parent directories
+    let currentDir = path_module.dirname(filePath);
+    const root = path_module.parse(currentDir).root;
+
+    while (currentDir !== root) {
+      const p4ignorePath = path_module.join(currentDir, '.p4ignore');
+      if (fs_module.existsSync(p4ignorePath)) {
+        const ignoreContent = fs_module.readFileSync(p4ignorePath, 'utf-8');
+        const patterns = ignoreContent.split('\n')
+          .map(line => line.trim())
+          .filter(line => line && !line.startsWith('#'));
+
+        // Check if file matches any pattern
+        for (const pattern of patterns) {
+          const normalizedPattern = pattern.replace(/\/$/, ''); // Remove trailing slash
+          const fileRelativePath = path_module.relative(currentDir, filePath).replace(/\\/g, '/');
+
+          // Simple pattern matching
+          if (normalizedPattern.startsWith('/')) {
+            // Absolute pattern like /target/
+            const pathToCheck = normalizedPattern.substring(1);
+            if (fileRelativePath.startsWith(pathToCheck + '/') || fileRelativePath === pathToCheck) {
+              console.log(`[Perforce] File ignored by pattern "${pattern}": ${filePath}`);
+              return true;
+            }
+          } else {
+            // Relative pattern like target/
+            if (fileRelativePath.includes('/' + normalizedPattern + '/') ||
+                fileRelativePath.startsWith(normalizedPattern + '/')) {
+              console.log(`[Perforce] File ignored by pattern "${pattern}": ${filePath}`);
+              return true;
+            }
+          }
+        }
+        break;
+      }
+      currentDir = path_module.dirname(currentDir);
+    }
+
+    return false;
+  } catch (error) {
+    console.log(`[Perforce] Error checking .p4ignore: ${error}`);
+    return false;
+  }
+}
+
 async function isInPerforceWorkspace(filePath: string): Promise<boolean> {
   try {
     // Try to run p4 where on the file - if successful, file is in a Perforce workspace
@@ -250,6 +301,14 @@ export function activate(context: vscode.ExtensionContext) {
   // Listen for file creation using FileWatcher
   const createWatcherDisposable = watcher.onDidCreate(async (uri) => {
     console.log(`[Perforce] File created: ${uri.fsPath}`);
+
+    // Skip files that are ignored by .p4ignore
+    const isIgnored = await isIgnoredByP4Ignore(uri.fsPath);
+    if (isIgnored) {
+      console.log(`[Perforce] Skipping file ignored by .p4ignore`);
+      return;
+    }
+
     const config = vscode.workspace.getConfiguration('perforceExtension');
     if (!config.get('enabled', true)) {
       console.log('[Perforce] Extension is disabled, skipping file creation');
@@ -303,6 +362,14 @@ export function activate(context: vscode.ExtensionContext) {
   // Listen for file deletion using FileWatcher
   const deleteWatcherDisposable = watcher.onDidDelete(async (uri) => {
     console.log(`[Perforce] File deleted: ${uri.fsPath}`);
+
+    // Skip files that are ignored by .p4ignore
+    const isIgnored = await isIgnoredByP4Ignore(uri.fsPath);
+    if (isIgnored) {
+      console.log(`[Perforce] Skipping file ignored by .p4ignore`);
+      return;
+    }
+
     const config = vscode.workspace.getConfiguration('perforceExtension');
     if (!config.get('enabled', true)) {
       console.log('[Perforce] Extension is disabled, skipping file deletion');
